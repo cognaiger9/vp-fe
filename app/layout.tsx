@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import RootLayoutClient from './layout.client'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
+  title: 'QueryPilot',
+  description: 'AI-powered SQL Assistant',
   generator: 'v0.dev',
 }
 
@@ -14,7 +15,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <RootLayoutClient>
+          {children}
+        </RootLayoutClient>
+      </body>
     </html>
   )
 }

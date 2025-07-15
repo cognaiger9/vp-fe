@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,8 +12,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AuthLayout } from "@/components/auth-layout"
 import { PasswordInput } from "@/components/password-input"
 import { AlertCircle, Loader2 } from "lucide-react"
+import { useAuth } from "@/lib/auth"
 
 export default function LoginPage() {
+  const router = useRouter()
+  const { login } = useAuth()
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -25,19 +29,11 @@ export default function LoginPage() {
     setError("")
     setIsLoading(true)
 
-    // Simulate API call
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      // Simulate login logic
-      if (formData.username === "demo" && formData.password === "password") {
-        // Redirect to main app
-        window.location.href = "/"
-      } else {
-        setError("Invalid username or password. Try demo/password for testing.")
-      }
-    } catch (err) {
-      setError("An error occurred during login. Please try again.")
+      await login(formData.username, formData.password)
+      router.push("/")
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Invalid username or password.")
     } finally {
       setIsLoading(false)
     }
@@ -116,13 +112,6 @@ export default function LoginPage() {
               Register here
             </Link>
           </div>
-        </div>
-
-        {/* Demo Credentials */}
-        <div className="mt-6 p-3 bg-slate-50 rounded-md border border-slate-200">
-          <p className="text-xs text-slate-600 text-center">
-            <strong>Demo Credentials:</strong> Username: demo, Password: password
-          </p>
         </div>
       </form>
     </AuthLayout>

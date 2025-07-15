@@ -4,6 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,16 +12,21 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AuthLayout } from "@/components/auth-layout"
 import { PasswordInput } from "@/components/password-input"
 import { AlertCircle, CheckCircle, Loader2 } from "lucide-react"
+import { auth } from "@/lib/api"
 
 export default function RegisterPage() {
+  const router = useRouter()
   const [formData, setFormData] = useState({
     username: "",
     password: "",
     confirmPassword: "",
+    email: "", // Added for backend integration
+    full_name: "", // Added for backend integration
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
+  const [confirmationRequired, setConfirmationRequired] = useState(false)
 
   const validateForm = () => {
     if (formData.username.length < 3) {
@@ -48,19 +54,27 @@ export default function RegisterPage() {
 
     setIsLoading(true)
 
-    // Simulate API call
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      const response = await auth.register({
+        username: formData.username,
+        password: formData.password,
+        email: formData.email,
+        full_name: formData.full_name,
+      })
 
-      // Simulate registration logic
-      setSuccess(true)
-
-      // Redirect to login after success
-      setTimeout(() => {
-        window.location.href = "/login"
-      }, 2000)
-    } catch (err) {
-      setError("An error occurred during registration. Please try again.")
+      // Handle AWS Cognito case where confirmation is required
+      if (response.confirmation_required) {
+        setConfirmationRequired(true)
+        setSuccess(true)
+      } else {
+        setSuccess(true)
+        // Redirect to login after success
+        setTimeout(() => {
+          router.push("/login")
+        }, 2000)
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "An error occurred during registration. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -82,10 +96,17 @@ export default function RegisterPage() {
 
   if (success) {
     return (
-      <AuthLayout title="Registration Successful!" subtitle="Your account has been created successfully">
+      <AuthLayout 
+        title={confirmationRequired ? "Check Your Email" : "Registration Successful!"} 
+        subtitle={confirmationRequired ? "Please check your email for verification instructions" : "Your account has been created successfully"}
+      >
         <div className="text-center space-y-4">
           <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
-          <p className="text-slate-600">Welcome to QueryPilot! You will be redirected to the login page shortly.</p>
+          <p className="text-slate-600">
+            {confirmationRequired 
+              ? "We've sent you an email with a confirmation code. Please verify your account to continue."
+              : "Welcome to QueryPilot! You will be redirected to the login page shortly."}
+          </p>
           <Link href="/login" className="text-blue-600 hover:text-blue-700 hover:underline">
             Go to Login
           </Link>
@@ -122,6 +143,36 @@ export default function RegisterPage() {
             {formData.username && formData.username.length < 3 && (
               <p className="text-xs text-amber-600 mt-1">Username must be at least 3 characters</p>
             )}
+          </div>
+
+          <div>
+            <Label htmlFor="email" className="text-sm font-medium text-slate-700">
+              Email
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="Enter your email"
+              value={formData.email}
+              onChange={(e) => handleInputChange("email", e.target.value)}
+              className="mt-1"
+              disabled={isLoading}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="full_name" className="text-sm font-medium text-slate-700">
+              Full Name
+            </Label>
+            <Input
+              id="full_name"
+              type="text"
+              placeholder="Enter your full name"
+              value={formData.full_name}
+              onChange={(e) => handleInputChange("full_name", e.target.value)}
+              className="mt-1"
+              disabled={isLoading}
+            />
           </div>
 
           <div>
