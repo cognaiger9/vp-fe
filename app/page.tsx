@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ChatGPTMessage } from "@/components/chatgpt-message"
 import { ChatGPTInput } from "@/components/chatgpt-input"
@@ -11,7 +11,11 @@ import { ChatGPTMainContent } from "@/components/chatgpt-main-content"
 import { ExternalKnowledgeUpload } from "@/components/external-knowledge-upload"
 import { ChatGPTThinking } from "@/components/chatgpt-thinking"
 import { AutoScrollArea } from "@/components/auto-scroll-area"
+import { useAuth } from "@/lib/auth"
+import { chat, ChatSessionResponse, ChatMessageResponse } from "@/lib/api"
+import { toast } from "@/hooks/use-toast"
 
+// Updated interfaces to match backend response
 interface Message {
   id: string
   type: "user" | "assistant" | "error"
@@ -20,7 +24,11 @@ interface Message {
   results?: Array<Record<string, any>>
   timestamp: Date
   isNew?: boolean
-  responseTime?: number // Time in milliseconds
+  responseTime?: number
+  responseType?: string
+  executionTime?: number
+  rowsCount?: number
+  hasData?: boolean
 }
 
 interface ChatSession {
@@ -29,6 +37,7 @@ interface ChatSession {
   lastMessage: string
   timestamp: Date
   isActive: boolean
+  messageCount: number
 }
 
 interface UserRole {
@@ -39,67 +48,19 @@ interface UserRole {
 }
 
 export default function QueryPilot() {
+  const { user, isLoading } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([
-    {
-      id: "1",
-      title: "CASA Growth Analysis 2024 vs 2023",
-      lastMessage: "Compare CASA growth by segment...",
-      timestamp: new Date(Date.now() - 86400000 * 0.5), // Today
-      isActive: true, // Set this one as active for initial load
-    },
-    {
-      id: "2",
-      title: "Monthly Revenue Report Q4",
-      lastMessage: "Generate monthly revenue report for Q4",
-      timestamp: new Date(Date.now() - 86400000 * 1.2), // Yesterday
-      isActive: false,
-    },
-    {
-      id: "3",
-      title: "Customer Segmentation Analysis",
-      lastMessage: "Analyze customer segments by value",
-      timestamp: new Date(Date.now() - 86400000 * 3), // 3 days ago
-      isActive: false,
-    },
-    {
-      id: "4",
-      title: "Product Performance Review",
-      lastMessage: "Top 10 products by sales volume last quarter",
-      timestamp: new Date(Date.now() - 86400000 * 7), // 7 days ago
-      isActive: false,
-    },
-    {
-      id: "5",
-      title: "Employee Turnover Rate Q1",
-      lastMessage: "Calculate employee turnover for Q1 2024",
-      timestamp: new Date(Date.now() - 86400000 * 15), // 15 days ago
-      isActive: false,
-    },
-    {
-      id: "6",
-      title: "Marketing Campaign ROI",
-      lastMessage: "Evaluate ROI for recent marketing campaigns",
-      timestamp: new Date(Date.now() - 86400000 * 30), // 30 days ago
-      isActive: false,
-    },
-    {
-      id: "7",
-      title: "Supply Chain Optimization",
-      lastMessage: "Identify bottlenecks in the supply chain",
-      timestamp: new Date(Date.now() - 86400000 * 60), // 2 months ago
-      isActive: false,
-    },
-  ])
-
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const [inputValue, setInputValue] = useState("")
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
   const [scrollTrigger, setScrollTrigger] = useState(0)
   const [requestStartTime, setRequestStartTime] = useState<number | null>(null)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
 
   const userRole: UserRole = {
-    name: "Alex Chen",
+    name: user?.full_name || "User",
     permissions: [
       "READ_CUSTOMERS",
       "READ_ORDERS",
@@ -112,363 +73,272 @@ export default function QueryPilot() {
     lastLogin: new Date(Date.now() - 3600000),
   }
 
+  // Load chat history on component mount
+  useEffect(() => {
+    if (user && !isLoading) {
+      loadChatHistory()
+    }
+  }, [user, isLoading])
+
+  const loadChatHistory = async () => {
+    try {
+      setIsLoadingHistory(true)
+      const sessions = await chat.getChatHistory()
+      
+      const formattedSessions: ChatSession[] = sessions.map((session, index) => ({
+        id: session.id,
+        title: session.title,
+        lastMessage: `${session.message_count} messages`,
+        timestamp: new Date(session.updated_at),
+        isActive: index === 0, // Set first session as active
+        messageCount: session.message_count
+      }))
+
+      setChatSessions(formattedSessions)
+      
+      // Load messages for the first session if it exists
+      if (formattedSessions.length > 0) {
+        await loadChatMessages(formattedSessions[0].id)
+        setCurrentChatId(formattedSessions[0].id)
+      }
+    } catch (error) {
+      console.error('Error loading chat history:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load chat history",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingHistory(false)
+    }
+  }
+
+  const loadChatMessages = async (chatId: string) => {
+    try {
+      const chatData = await chat.getChatById(chatId)
+      
+      const formattedMessages: Message[] = chatData.messages.map(msg => {
+        let results: Array<Record<string, any>> | undefined = undefined
+        
+        // For table/chart responses, try to parse data from content (legacy) or use separate data field
+        if (msg.response_type === 'table' || msg.response_type === 'chart') {
+          try {
+            // Try parsing content as JSON (legacy format)
+            results = JSON.parse(msg.content)
+          } catch (e) {
+            // If parsing fails, content is human-readable message
+            // Results should come from separate API call if needed
+            results = undefined
+          }
+        }
+
+        return {
+          id: msg.id,
+          type: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+          sqlQuery: msg.sql_query || undefined,
+          results,
+          timestamp: new Date(msg.created_at),
+          responseType: msg.response_type || undefined,
+          executionTime: msg.execution_time || undefined,
+          rowsCount: msg.rows_count || undefined,
+          hasData: msg.has_data,
+        }
+      })
+
+      setMessages(formattedMessages)
+    } catch (error) {
+      console.error('Error loading chat messages:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load chat messages",
+        variant: "destructive",
+      })
+    }
+  }
+
   const triggerScroll = () => {
     setScrollTrigger((prev) => prev + 1)
   }
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim() || isThinking) return
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isThinking || !user) return
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
       type: "user",
       content: inputValue,
       timestamp: new Date(),
       isNew: true,
     }
 
-    setMessages((prev) => [...prev, newMessage])
+    setMessages((prev) => [...prev, userMessage])
     const currentInput = inputValue
     setInputValue("")
     setIsThinking(true)
 
-    // Start timing the response
     const startTime = Date.now()
     setRequestStartTime(startTime)
 
     setTimeout(() => triggerScroll(), 50)
 
-    // Simulate variable response times based on query complexity
-    const getResponseTime = (input: string) => {
-      const lowerInput = input.toLowerCase()
-      if (lowerInput.includes("casa") || lowerInput.includes("growth")) {
-        return 2500 // Complex analysis takes longer
-      } else if (lowerInput.includes("customer") || lowerInput.includes("segment")) {
-        return 3200 // Customer analysis is complex
-      } else if (lowerInput.includes("revenue") || lowerInput.includes("sales")) {
-        return 2800 // Revenue queries are moderately complex
-      } else if (lowerInput.includes("hello") || lowerInput.includes("hi")) {
-        return 800 // Simple greetings are fast
+    try {
+      let response
+      
+      if (currentChatId) {
+        // Continue existing chat
+        response = await chat.continueChat(currentChatId, { message: currentInput })
       } else {
-        return 2000 // Default response time
+        // Create new chat
+        response = await chat.newChat({ message: currentInput })
+        setCurrentChatId(response.chat_id)
+        
+        // Update chat sessions with new chat
+        const newSession: ChatSession = {
+          id: response.chat_id,
+          title: response.title,
+          lastMessage: currentInput.substring(0, 50) + "...",
+          timestamp: new Date(response.created_at),
+          isActive: true,
+          messageCount: 2 // user message + assistant response
+        }
+        
+        setChatSessions(prev => 
+          [newSession, ...prev.map(s => ({ ...s, isActive: false }))]
+        )
       }
-    }
 
-    const responseTime = getResponseTime(currentInput)
-
-    setTimeout(() => {
-      setIsThinking(false)
       const actualResponseTime = Date.now() - startTime
-
-      const input = currentInput.toLowerCase()
-      let aiResponse: Message
-
-      if (input.includes("hello") || input.includes("hi")) {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          type: "assistant",
-          content:
-            "Hello! I'm QueryPilot, your AI SQL assistant. I can help you analyze data, generate reports, create visualizations, and export results in various formats. What would you like to explore today?",
-          timestamp: new Date(),
-          isNew: true,
-          responseTime: actualResponseTime,
-        }
-      } else if (input.includes("casa") || input.includes("growth")) {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          type: "assistant",
-          content: "Here's the CASA growth analysis comparing 2024 vs 2023 by segment:",
-          sqlQuery: `SELECT 
-    segment,
-    SUM(CASE WHEN YEAR(date) = 2023 THEN casa_balance ELSE 0 END) as casa_2023,
-    SUM(CASE WHEN YEAR(date) = 2024 THEN casa_balance ELSE 0 END) as casa_2024,
-    ROUND(((SUM(CASE WHEN YEAR(date) = 2024 THEN casa_balance ELSE 0 END) - 
-            SUM(CASE WHEN YEAR(date) = 2023 THEN casa_balance ELSE 0 END)) / 
-            SUM(CASE WHEN YEAR(date) = 2023 THEN casa_balance ELSE 0 END)) * 100, 2) as growth_rate
-FROM casa_accounts ca
-JOIN customer_segments cs ON ca.customer_id = cs.customer_id
-WHERE YEAR(date) IN (2023, 2024)
-GROUP BY segment
-ORDER BY growth_rate DESC;`,
-          results: [
-            {
-              segment: "Premium",
-              casa_2023: 15420000000,
-              casa_2024: 18950000000,
-              growth_rate: 22.89,
-            },
-            {
-              segment: "Corporate",
-              casa_2023: 28750000000,
-              casa_2024: 34200000000,
-              growth_rate: 18.96,
-            },
-            {
-              segment: "SME",
-              casa_2023: 12300000000,
-              casa_2024: 14100000000,
-              growth_rate: 14.63,
-            },
-            {
-              segment: "Retail",
-              casa_2023: 45600000000,
-              casa_2024: 51800000000,
-              growth_rate: 13.6,
-            },
-            {
-              segment: "Mass Market",
-              casa_2023: 8900000000,
-              casa_2024: 9850000000,
-              growth_rate: 10.67,
-            },
-          ],
-          timestamp: new Date(),
-          isNew: true,
-          responseTime: actualResponseTime,
-        }
-      } else if (input.includes("customer") || input.includes("segment")) {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          type: "assistant",
-          content: "Here's the customer segmentation analysis with detailed metrics:",
-          sqlQuery: `SELECT 
-    cs.segment_name,
-    COUNT(DISTINCT c.customer_id) as customer_count,
-    AVG(a.balance) as avg_balance,
-    SUM(a.balance) as total_balance,
-    ROUND(AVG(DATEDIFF(CURRENT_DATE, c.registration_date) / 365), 1) as avg_tenure_years
-FROM customers c
-JOIN customer_segments cs ON c.segment_id = cs.segment_id
-JOIN accounts a ON c.customer_id = a.customer_id
-WHERE a.status = 'ACTIVE'
-GROUP BY cs.segment_name, cs.segment_id
-ORDER BY total_balance DESC;`,
-          results: [
-            {
-              segment_name: "High Net Worth",
-              customer_count: 2847,
-              avg_balance: 2850000,
-              total_balance: 8115450000,
-              avg_tenure_years: 8.3,
-            },
-            {
-              segment_name: "Corporate",
-              customer_count: 1256,
-              avg_balance: 4200000,
-              total_balance: 5275200000,
-              avg_tenure_years: 6.7,
-            },
-            {
-              segment_name: "Premium Individual",
-              customer_count: 15420,
-              avg_balance: 285000,
-              total_balance: 4394700000,
-              avg_tenure_years: 4.2,
-            },
-            {
-              segment_name: "SME",
-              customer_count: 8934,
-              avg_balance: 420000,
-              total_balance: 3752280000,
-              avg_tenure_years: 3.8,
-            },
-            {
-              segment_name: "Mass Market",
-              customer_count: 45678,
-              avg_balance: 45000,
-              total_balance: 2055510000,
-              avg_tenure_years: 2.1,
-            },
-          ],
-          timestamp: new Date(),
-          isNew: true,
-          responseTime: actualResponseTime,
-        }
-      } else if (input.includes("revenue") || input.includes("sales")) {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          type: "assistant",
-          content: "Here's your revenue analysis with monthly breakdown:",
-          sqlQuery: `SELECT 
-    DATE_FORMAT(transaction_date, '%Y-%m') as month,
-    COUNT(*) as transaction_count,
-    SUM(amount) as total_revenue,
-    AVG(amount) as avg_transaction_value,
-    COUNT(DISTINCT customer_id) as unique_customers
-FROM transactions 
-WHERE transaction_date >= DATE_SUB(CURRENT_DATE, INTERVAL 12 MONTH)
-  AND transaction_type = 'REVENUE'
-GROUP BY DATE_FORMAT(transaction_date, '%Y-%m')
-ORDER BY month DESC;`,
-          results: [
-            {
-              month: "2024-12",
-              transaction_count: 15678,
-              total_revenue: 234507500,
-              avg_transaction_value: 14950,
-              unique_customers: 9876,
-            },
-            {
-              month: "2024-11",
-              transaction_count: 14234,
-              total_revenue: 218905000,
-              avg_transaction_value: 15385,
-              unique_customers: 8934,
-            },
-            {
-              month: "2024-10",
-              transaction_count: 17890,
-              total_revenue: 287502500,
-              avg_transaction_value: 16075,
-              unique_customers: 11234,
-            },
-            {
-              month: "2024-09",
-              transaction_count: 13456,
-              total_revenue: 196750000,
-              avg_transaction_value: 14625,
-              unique_customers: 8567,
-            },
-            {
-              month: "2024-08",
-              transaction_count: 18945,
-              total_revenue: 312508000,
-              avg_transaction_value: 16495,
-              unique_customers: 12456,
-            },
-          ],
-          timestamp: new Date(),
-          isNew: true,
-          responseTime: actualResponseTime,
-        }
-      } else {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          type: "assistant",
-          content:
-            "I can help you with various types of analysis including data visualization, file exports, and comprehensive reporting. Here's a sample database overview:",
-          sqlQuery: `SELECT 
-    table_name,
-    column_count,
-    row_count,
-    last_updated,
-    table_size_mb
-FROM information_schema.tables_summary
-WHERE schema_name = 'banking_db'
-ORDER BY row_count DESC;`,
-          results: [
-            {
-              table_name: "transactions",
-              column_count: 12,
-              row_count: 2847563,
-              last_updated: "2024-12-15 11:45:00",
-              table_size_mb: 1250,
-            },
-            {
-              table_name: "customers",
-              column_count: 18,
-              row_count: 156789,
-              last_updated: "2024-12-15 10:30:00",
-              table_size_mb: 89,
-            },
-            {
-              table_name: "accounts",
-              column_count: 15,
-              row_count: 234567,
-              last_updated: "2024-12-15 09:15:00",
-              table_size_mb: 156,
-            },
-            {
-              table_name: "casa_accounts",
-              column_count: 10,
-              row_count: 89456,
-              last_updated: "2024-12-14 16:20:00",
-              table_size_mb: 67,
-            },
-          ],
-          timestamp: new Date(),
-          isNew: true,
-          responseTime: actualResponseTime,
-        }
+      
+      // Use the new response structure with separate content, data, and SQL
+      const assistantMessage: Message = {
+        id: response.message_id,
+        type: "assistant",
+        content: response.response.content, // Human-readable message
+        sqlQuery: response.response.sql_query || undefined,
+        results: response.response.data || undefined, // Query results in separate field
+        timestamp: new Date(),
+        isNew: true,
+        responseTime: actualResponseTime,
+        responseType: response.response.type,
+        executionTime: response.response.execution_time,
+        rowsCount: response.response.rows_count,
       }
 
-      setMessages((prev) => [...prev, aiResponse])
+      setMessages((prev) => [...prev, assistantMessage])
       setTimeout(() => triggerScroll(), 100)
-    }, responseTime)
+
+    } catch (error) {
+      console.error('Error sending message:', error)
+      
+      const errorMessage: Message = {
+        id: `error-${Date.now()}`,
+        type: "error",
+        content: "Sorry, there was an error processing your message. Please try again.",
+        timestamp: new Date(),
+        isNew: true,
+      }
+
+      setMessages((prev) => [...prev, errorMessage])
+      
+      toast({
+        title: "Error",
+        description: "Failed to send message",
+        variant: "destructive",
+      })
+    } finally {
+      setIsThinking(false)
+    }
   }
 
   const handleNewChat = () => {
-    const newSession: ChatSession = {
-      id: Date.now().toString(),
-      title: "New Chat",
-      lastMessage: "",
-      timestamp: new Date(),
-      isActive: true,
-    }
-
-    setChatSessions((prev) => prev.map((session) => ({ ...session, isActive: false })))
-    setChatSessions((prev) => [newSession, ...prev])
+    // Reset current chat state
+    setCurrentChatId(null)
     setMessages([])
     setIsThinking(false)
+    
+    // Deactivate all sessions
+    setChatSessions(prev => prev.map(session => ({ ...session, isActive: false })))
   }
 
-  const handleSessionClick = (sessionId: string) => {
-    setChatSessions((prev) =>
-      prev.map((session) => ({
-        ...session,
-        isActive: session.id === sessionId,
-      })),
-    )
-    setIsThinking(false)
+  const handleSessionClick = async (sessionId: string) => {
+    if (sessionId === currentChatId) return
 
-    if (sessionId === "1") {
-      setMessages([
-        {
-          id: "demo1",
-          type: "user",
-          content: "Compare CASA growth rate between 2024 and 2023 by customer segment",
-          timestamp: new Date(Date.now() - 240000),
-        },
-        {
-          id: "demo2",
-          type: "assistant",
-          content: "Here's the CASA growth analysis comparing 2024 vs 2023 by segment:",
-          sqlQuery: `SELECT segment, casa_2023, casa_2024, growth_rate FROM casa_growth_analysis;`,
-          results: [
-            { segment: "Premium", casa_2023: 15420000000, casa_2024: 18950000000, growth_rate: 22.89 },
-            { segment: "Corporate", casa_2023: 28750000000, casa_2024: 34200000000, growth_rate: 18.96 },
-          ],
-          timestamp: new Date(Date.now() - 180000),
-          responseTime: 2340, // Example response time
-        },
-      ])
-    } else {
-      setMessages([])
+    try {
+      setChatSessions(prev =>
+        prev.map(session => ({
+          ...session,
+          isActive: session.id === sessionId,
+        }))
+      )
+      
+      setCurrentChatId(sessionId)
+      setIsThinking(false)
+      await loadChatMessages(sessionId)
+    } catch (error) {
+      console.error('Error loading session:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load chat session",
+        variant: "destructive",
+      })
     }
   }
 
-  const handleDeleteSession = (sessionId: string) => {
-    // Don't delete if it's the only session or if it's currently active
+  const handleDeleteSession = async (sessionId: string) => {
     if (chatSessions.length <= 1) return
 
-    const sessionToDelete = chatSessions.find((s) => s.id === sessionId)
-    if (!sessionToDelete) return
+    try {
+      await chat.deleteChat(sessionId)
+      
+      const sessionToDelete = chatSessions.find(s => s.id === sessionId)
+      if (!sessionToDelete) return
 
-    // If deleting the active session, switch to another session
-    if (sessionToDelete.isActive) {
-      const remainingSessions = chatSessions.filter((s) => s.id !== sessionId)
-      if (remainingSessions.length > 0) {
-        // Activate the first remaining session
-        setChatSessions((prev) =>
-          prev.filter((s) => s.id !== sessionId).map((s, index) => ({ ...s, isActive: index === 0 })),
-        )
-        // Clear messages for the new active session
-        setMessages([])
+      // If deleting the active session, switch to another session
+      if (sessionToDelete.isActive) {
+        const remainingSessions = chatSessions.filter(s => s.id !== sessionId)
+        if (remainingSessions.length > 0) {
+          setChatSessions(prev =>
+            prev.filter(s => s.id !== sessionId).map((s, index) => ({ ...s, isActive: index === 0 }))
+          )
+          // Load the new active session
+          await loadChatMessages(remainingSessions[0].id)
+          setCurrentChatId(remainingSessions[0].id)
+        } else {
+          // No remaining sessions, reset to new chat state
+          handleNewChat()
+        }
+      } else {
+        // Just remove the session if it's not active
+        setChatSessions(prev => prev.filter(s => s.id !== sessionId))
       }
-    } else {
-      // Just remove the session if it's not active
-      setChatSessions((prev) => prev.filter((s) => s.id !== sessionId))
+
+      toast({
+        title: "Success",
+        description: "Chat deleted successfully",
+      })
+    } catch (error) {
+      console.error('Error deleting session:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete chat",
+        variant: "destructive",
+      })
     }
+  }
+
+  // Show loading state while authenticating or loading history
+  if (isLoading || isLoadingHistory) {
+    return (
+      <div className="bg-gray-900 min-h-screen flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    )
+  }
+
+  // Redirect to login if not authenticated
+  if (!user) {
+    return null // Auth hook will handle redirect
   }
 
   const isWelcomeState = messages.length === 0

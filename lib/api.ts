@@ -49,6 +49,66 @@ export interface LoginResponse {
   user_info?: any;
 }
 
+// Chat API interfaces
+export interface ChatRequest {
+  message: string;
+}
+
+export interface ChatResponse {
+  type: 'text' | 'table' | 'chart';
+  content: string; // Human-readable message to user
+  sql_query?: string; // SQL query if generated
+  data?: Record<string, any>[]; // Query results if available
+  execution_time?: number;
+  rows_count?: number;
+}
+
+export interface ChatSessionResponse {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface ChatMessageResponse {
+  id: string;
+  role: string;
+  content: string;
+  sql_query?: string;
+  response_type?: string;
+  execution_time?: number;
+  rows_count?: number;
+  created_at: string;
+  has_data: boolean;
+}
+
+export interface NewChatResponse {
+  chat_id: string;
+  title: string;
+  message_id: string;
+  created_at: string;
+  updated_at: string;
+  response: ChatResponse;
+}
+
+export interface ChatHistoryResponse {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages: ChatMessageResponse[];
+}
+
+export interface MessageDataResponse {
+  message_id: string;
+  data: Record<string, any>[];
+  columns: string[];
+  shape: [number, number];
+  sql_query?: string;
+  response_type?: string;
+}
+
 // Store the access token in memory
 let accessToken: string | null = null;
 
@@ -83,6 +143,54 @@ export const auth = {
   },
 
   getToken: () => accessToken,
+};
+
+// Chat API functions
+export const chat = {
+  // Create new chat and send first message
+  newChat: async (data: ChatRequest): Promise<NewChatResponse> => {
+    const response = await api.post('/chat/new', data);
+    return response.data;
+  },
+
+  // Continue existing chat
+  continueChat: async (chatId: string, data: ChatRequest): Promise<NewChatResponse> => {
+    const response = await api.post(`/chat/continue/${chatId}`, data);
+    return response.data;
+  },
+
+  // Get chat history (list of sessions)
+  getChatHistory: async (): Promise<ChatSessionResponse[]> => {
+    const response = await api.get('/chat/history');
+    return response.data;
+  },
+
+  // Get specific chat with messages
+  getChatById: async (chatId: string): Promise<ChatHistoryResponse> => {
+    const response = await api.get(`/chat/history/${chatId}`);
+    return response.data;
+  },
+
+  // Delete chat
+  deleteChat: async (chatId: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/chat/history/${chatId}`);
+    return response.data;
+  },
+
+  // Get message data for preview
+  getMessageData: async (messageId: string): Promise<MessageDataResponse> => {
+    const response = await api.get(`/chat/data/${messageId}`);
+    return response.data;
+  },
+
+  // Download message data
+  downloadMessageData: async (messageId: string, format: 'json' | 'csv' | 'excel' | 'pdf') => {
+    const response = await api.get(`/chat/download/${messageId}`, {
+      params: { format },
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };
 
 export default api; 
