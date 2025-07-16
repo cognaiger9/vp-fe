@@ -194,4 +194,65 @@ export const chat = {
   },
 };
 
+// Database Schema API
+export async function listDatabases() {
+  const response = await fetch('/api/db-info/databases', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch databases');
+  }
+
+  return await response.json();
+}
+
+export async function getDatabaseSchema(dbName: string) {
+  const response = await fetch(`/api/db-info/schema/${dbName}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch schema for database ${dbName}`);
+  }
+
+  return await response.json();
+}
+
+export async function listTables(dbName: string) {
+  const response = await fetch(`/api/db-info/tables/${dbName}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch tables for database ${dbName}`);
+  }
+
+  return await response.json();
+}
+
+export async function getTableInfo(dbName: string, tableName: string) {
+  const response = await fetch(`/api/db-info/table/${dbName}/${tableName}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch info for table ${tableName}`);
+  }
+
+  return await response.json();
+}
+
 export default api; 

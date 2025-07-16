@@ -21,6 +21,7 @@ import {
   Edit3,
   Archive,
 } from "lucide-react"
+import { DatabaseSchemaDialog } from "./database-schema-dialog"
 
 interface SidebarContextType {
   isOpen: boolean
@@ -169,6 +170,7 @@ export function ChatGPTSidebar({
   onDeleteSession,
 }: ChatGPTSidebarProps) {
   const { isOpen, close } = useChatGPTSidebar()
+  const [showDatabaseSchema, setShowDatabaseSchema] = useState(false)
 
   return (
     <>
@@ -203,11 +205,11 @@ export function ChatGPTSidebar({
               <Upload className="h-4 w-4 mr-3" />
               Upload Knowledge
             </Button>
-            <Button variant="ghost" className="w-full justify-start text-gray-300 hover:text-white hover:bg-gray-700">
-              <Search className="h-4 w-4 mr-3" />
-              Search Queries
-            </Button>
-            <Button variant="ghost" className="w-full justify-start text-gray-300 hover:text-white hover:bg-gray-700">
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start text-gray-300 hover:text-white hover:bg-gray-700"
+              onClick={() => setShowDatabaseSchema(true)}
+            >
               <Database className="h-4 w-4 mr-3" />
               Database Schema
             </Button>
@@ -292,6 +294,9 @@ export function ChatGPTSidebar({
           </div>
         </div>
       </div>
+
+      {/* Database Schema Dialog */}
+      <DatabaseSchemaDialog open={showDatabaseSchema} onOpenChange={setShowDatabaseSchema} />
     </>
   )
 }
