@@ -16,6 +16,22 @@ interface EnhancedResultsDisplayProps {
 export function EnhancedResultsDisplay({ results, title, sqlQuery }: EnhancedResultsDisplayProps) {
   const [activeView, setActiveView] = useState<"table" | "chart" | "file">("table")
 
+  // Handle empty results
+  if (!results || results.length === 0) {
+    return (
+      <Card className="bg-gray-800 border-gray-700">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-gray-300">
+            {title} (0 rows)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-gray-400 text-center py-4">No results to display</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   // Determine if data can be visualized as chart
   const hasChartData = results.length > 0 && Object.values(results[0]).some((value) => typeof value === "number")
 

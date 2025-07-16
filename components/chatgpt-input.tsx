@@ -24,7 +24,7 @@ export function ChatGPTInput({
   onSend, 
   onUploadKnowledge, 
   disabled = false,
-  selectedDatabase = "raw",
+  selectedDatabase = "raw_database",
   onDatabaseChange = () => {}
 }: ChatGPTInputProps) {
   const [isRecording, setIsRecording] = useState(false)
@@ -103,20 +103,20 @@ export function ChatGPTInput({
                     disabled={disabled}
                   >
                     <Database className="h-3.5 w-3.5 mr-1" />
-                    {selectedDatabase === "raw" ? "Raw Database" : "Aggregated Database"}
+                    {selectedDatabase === "raw_database" ? "Raw Database" : "Aggregated Database"}
                     <ChevronDown className="h-3 w-3 opacity-50 ml-1" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="bg-gray-800 border-gray-700 text-gray-200">
                   <DropdownMenuItem 
-                    className={`text-sm ${selectedDatabase === "raw" ? "bg-gray-700" : ""}`}
-                    onClick={() => onDatabaseChange("raw")}
+                    className={`text-sm ${selectedDatabase === "raw_database" ? "bg-gray-700" : ""}`}
+                    onClick={() => onDatabaseChange("raw_database")}
                   >
                     Raw Database
                   </DropdownMenuItem>
                   <DropdownMenuItem 
-                    className={`text-sm ${selectedDatabase === "aggregated" ? "bg-gray-700" : ""}`}
-                    onClick={() => onDatabaseChange("aggregated")}
+                    className={`text-sm ${selectedDatabase === "agg_database" ? "bg-gray-700" : ""}`}
+                    onClick={() => onDatabaseChange("agg_database")}
                   >
                     Aggregated Database
                   </DropdownMenuItem>

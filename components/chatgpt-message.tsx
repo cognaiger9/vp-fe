@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { AlertCircle, Code, Database, User, Clock } from "lucide-react"
+import { AlertCircle, Code, Database, User, Clock, ChevronDown, ChevronUp } from "lucide-react"
 import { EnhancedResultsDisplay } from "./enhanced-results-display"
+import { Button } from "./ui/button"
 
 interface Message {
   id: string
@@ -25,6 +26,17 @@ export function ChatGPTMessage({ message, isNew = false }: ChatGPTMessageProps) 
   const [isVisible, setIsVisible] = useState(!isNew)
   const [showSqlQuery, setShowSqlQuery] = useState(false)
   const [showResults, setShowResults] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  // Check if results exceed the limit
+  const resultsExceedLimit = message.results && message.results.length > 20
+  
+  // Get limited or full results based on expanded state
+  const displayResults = message.results 
+    ? (resultsExceedLimit && !isExpanded 
+        ? message.results.slice(0, 20) 
+        : message.results)
+    : []
 
   useEffect(() => {
     if (isNew) {
@@ -73,6 +85,10 @@ export function ChatGPTMessage({ message, isNew = false }: ChatGPTMessageProps) 
 
   const isUser = message.type === "user"
 
+  const toggleExpand = () => {
+    setIsExpanded(!isExpanded)
+  }
+
   return (
     <div
       className={`flex ${isUser ? "justify-end" : "justify-start"} mb-6 transition-all duration-500 ease-out ${
@@ -97,15 +113,24 @@ export function ChatGPTMessage({ message, isNew = false }: ChatGPTMessageProps) 
 
         {/* Message Content */}
         <div className={`flex-1 min-w-0 ${isUser ? "text-right" : "text-left"}`}>
-          <div className="mb-2 flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-300">{message.type === "user" ? "You" : "QueryPilot"}</span>
-            <span className="text-xs text-gray-500">{formatTimestamp(message.timestamp)}</span>
-            {/* Response Time Badge - Only for assistant messages */}
-            {!isUser && message.responseTime && (
-              <Badge variant="outline" className="text-xs text-gray-400 border-gray-600 bg-gray-800/50">
-                <Clock className="h-3 w-3 mr-1" />
-                {formatResponseTime(message.responseTime)}
-              </Badge>
+          <div className={`mb-2 flex items-center ${isUser ? "justify-end" : "space-x-2"}`}>
+            {isUser ? (
+              <>
+                <span className="text-xs text-gray-500 mr-2">{formatTimestamp(message.timestamp)}</span>
+                <span className="text-sm font-medium text-gray-300">You</span>
+              </>
+            ) : (
+              <>
+                <span className="text-sm font-medium text-gray-300">QueryPilot</span>
+                <span className="text-xs text-gray-500">{formatTimestamp(message.timestamp)}</span>
+                {/* Response Time Badge - Only for assistant messages */}
+                {message.responseTime && (
+                  <Badge variant="outline" className="text-xs text-gray-400 border-gray-600 bg-gray-800/50">
+                    <Clock className="h-3 w-3 mr-1" />
+                    {formatResponseTime(message.responseTime)}
+                  </Badge>
+                )}
+              </>
             )}
           </div>
 
@@ -158,7 +183,31 @@ export function ChatGPTMessage({ message, isNew = false }: ChatGPTMessageProps) 
                 showResults ? "opacity-100 translate-y-0 max-h-none" : "opacity-0 translate-y-4 max-h-0 overflow-hidden"
               }`}
             >
-              <EnhancedResultsDisplay results={message.results} title="Query Results" sqlQuery={message.sqlQuery} />
+              <EnhancedResultsDisplay results={displayResults} title="Query Results" sqlQuery={message.sqlQuery} />
+              
+              {/* Show expand/collapse button when results exceed limit */}
+              {resultsExceedLimit && (
+                <div className="mt-2 text-center">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={toggleExpand}
+                    className="text-xs text-gray-800 border-gray-700 hover:bg-gray-700 hover:text-white font-medium"
+                  >
+                    {isExpanded ? (
+                      <>
+                        <ChevronUp className="h-3 w-3 mr-1" />
+                        Show Less (Showing all {message.results.length} results)
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-3 w-3 mr-1" />
+                        Show More (Showing 20 of {message.results.length} results)
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>

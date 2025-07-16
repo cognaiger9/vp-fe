@@ -29,7 +29,7 @@ export function ResultDisplayOptions({
           variant={activeView === "table" ? "secondary" : "ghost"}
           size="sm"
           onClick={() => onViewChange("table")}
-          className="text-gray-300 hover:text-white"
+          className="text-gray-600 hover:text-white"
         >
           <Grid3X3 className="h-4 w-4 mr-1" />
           Table
