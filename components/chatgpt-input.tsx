@@ -5,7 +5,8 @@ import type React from "react"
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Send } from "lucide-react"
+import { Send, Database, ChevronDown } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface ChatGPTInputProps {
   value: string
@@ -13,9 +14,19 @@ interface ChatGPTInputProps {
   onSend: () => void
   onUploadKnowledge: () => void
   disabled?: boolean
+  selectedDatabase?: string
+  onDatabaseChange?: (database: string) => void
 }
 
-export function ChatGPTInput({ value, onChange, onSend, onUploadKnowledge, disabled = false }: ChatGPTInputProps) {
+export function ChatGPTInput({ 
+  value, 
+  onChange, 
+  onSend, 
+  onUploadKnowledge, 
+  disabled = false,
+  selectedDatabase = "raw",
+  onDatabaseChange = () => {}
+}: ChatGPTInputProps) {
   const [isRecording, setIsRecording] = useState(false)
   const [isFocused, setIsFocused] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -52,8 +63,6 @@ export function ChatGPTInput({ value, onChange, onSend, onUploadKnowledge, disab
           } ${disabled ? "opacity-50" : ""}`}
         >
           <div className="flex items-end p-2 px-3">
-            {" "}
-            {/* Reduced p-4 to p-2, changed px-1 to px-3 */}
             <Textarea
               ref={textareaRef}
               placeholder={disabled ? "Please wait..." : "Ask anything about your database..."}
@@ -63,7 +72,7 @@ export function ChatGPTInput({ value, onChange, onSend, onUploadKnowledge, disab
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               disabled={disabled}
-              className="flex-1 bg-transparent border-none resize-none text-white placeholder-gray-400 focus:ring-0 focus:outline-none min-h-[20px] max-h-[120px] py-1" // Added py-1
+              className="flex-1 bg-transparent border-none resize-none text-white placeholder-gray-400 focus:ring-0 focus:outline-none min-h-[20px] max-h-[120px] py-1"
               rows={1}
             />
             <div className="flex items-center space-x-2 ml-2 flex-shrink-0 self-end mb-1">
@@ -79,6 +88,40 @@ export function ChatGPTInput({ value, onChange, onSend, onUploadKnowledge, disab
                   <Send className="h-4 w-4" />
                 </Button>
               )}
+            </div>
+          </div>
+          
+          {/* Database selector below the textarea */}
+          <div className="flex items-center px-3 pb-2">
+            <div className="flex items-center space-x-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-7 gap-1 border border-gray-700 bg-gray-900/50 hover:bg-gray-700 text-gray-300 text-xs font-medium"
+                    disabled={disabled}
+                  >
+                    <Database className="h-3.5 w-3.5 mr-1" />
+                    {selectedDatabase === "raw" ? "Raw Database" : "Aggregated Database"}
+                    <ChevronDown className="h-3 w-3 opacity-50 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="bg-gray-800 border-gray-700 text-gray-200">
+                  <DropdownMenuItem 
+                    className={`text-sm ${selectedDatabase === "raw" ? "bg-gray-700" : ""}`}
+                    onClick={() => onDatabaseChange("raw")}
+                  >
+                    Raw Database
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className={`text-sm ${selectedDatabase === "aggregated" ? "bg-gray-700" : ""}`}
+                    onClick={() => onDatabaseChange("aggregated")}
+                  >
+                    Aggregated Database
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </div>

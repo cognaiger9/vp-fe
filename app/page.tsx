@@ -58,6 +58,7 @@ export default function QueryPilot() {
   const [scrollTrigger, setScrollTrigger] = useState(0)
   const [requestStartTime, setRequestStartTime] = useState<number | null>(null)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
+  const [selectedDatabase, setSelectedDatabase] = useState<string>("raw")
 
   const userRole: UserRole = {
     name: user?.full_name || "User",
@@ -187,10 +188,16 @@ export default function QueryPilot() {
       
       if (currentChatId) {
         // Continue existing chat
-        response = await chat.continueChat(currentChatId, { message: currentInput })
+        response = await chat.continueChat(currentChatId, { 
+          message: currentInput,
+          database_type: selectedDatabase 
+        })
       } else {
         // Create new chat
-        response = await chat.newChat({ message: currentInput })
+        response = await chat.newChat({ 
+          message: currentInput,
+          database_type: selectedDatabase 
+        })
         setCurrentChatId(response.chat_id)
         
         // Update chat sessions with new chat
@@ -327,6 +334,11 @@ export default function QueryPilot() {
     }
   }
 
+  // Handle database change
+  const handleDatabaseChange = (database: string) => {
+    setSelectedDatabase(database)
+  }
+
   // Show loading state while authenticating or loading history
   if (isLoading || isLoadingHistory) {
     return (
@@ -379,6 +391,8 @@ export default function QueryPilot() {
                     onSend={handleSendMessage}
                     onUploadKnowledge={() => setUploadDialogOpen(true)}
                     disabled={isThinking}
+                    selectedDatabase={selectedDatabase}
+                    onDatabaseChange={handleDatabaseChange}
                   />
                 </div>
               </div>
@@ -392,6 +406,8 @@ export default function QueryPilot() {
                   onSend={handleSendMessage}
                   onUploadKnowledge={() => setUploadDialogOpen(true)}
                   disabled={isThinking}
+                  selectedDatabase={selectedDatabase}
+                  onDatabaseChange={handleDatabaseChange}
                 />
               </div>
             )}

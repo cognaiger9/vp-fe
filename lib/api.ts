@@ -52,6 +52,7 @@ export interface LoginResponse {
 // Chat API interfaces
 export interface ChatRequest {
   message: string;
+  database_type?: string; // 'raw' or 'aggregated'
 }
 
 export interface ChatResponse {
