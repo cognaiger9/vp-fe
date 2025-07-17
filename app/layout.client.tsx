@@ -1,7 +1,7 @@
 "use client"
 
-import { AuthProvider } from '@/components/auth-provider'
-import { Toaster } from '@/components/ui/toaster'
+import { AuthProvider } from '../components/auth-provider'
+import { Toaster } from '../components/ui/toaster'
 
 export default function RootLayoutClient({
   children,
