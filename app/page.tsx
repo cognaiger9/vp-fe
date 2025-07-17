@@ -11,7 +11,7 @@ import { ChatGPTMainContent } from "@/components/chatgpt-main-content"
 import { ExternalKnowledgeUpload } from "@/components/external-knowledge-upload"
 import { ChatGPTThinking } from "@/components/chatgpt-thinking"
 import { AutoScrollArea } from "@/components/auto-scroll-area"
-import { useAuth } from "@/lib/auth"
+import { useRequireAuth } from "@/lib/auth"
 import { chat, ChatSessionResponse, ChatMessageResponse } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 
@@ -48,7 +48,7 @@ interface UserRole {
 }
 
 export default function QueryPilot() {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading } = useRequireAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
@@ -348,10 +348,7 @@ export default function QueryPilot() {
     )
   }
 
-  // Redirect to login if not authenticated
-  if (!user) {
-    return null // Auth hook will handle redirect
-  }
+  // useRequireAuth will handle redirect if not authenticated
 
   const isWelcomeState = messages.length === 0
 

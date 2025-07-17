@@ -35,10 +35,16 @@ export function useAuthState(): AuthContextType {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored user data on mount
+    // Check for stored user data and token on mount
     const storedUser = localStorage.getItem('user');
-    if (storedUser) {
+    const storedToken = localStorage.getItem('access_token');
+    
+    if (storedUser && storedToken) {
       setUser(JSON.parse(storedUser));
+    } else if (storedUser && !storedToken) {
+      // User data exists but no token, clear user data
+      localStorage.removeItem('user');
+      setUser(null);
     }
     setIsLoading(false);
   }, []);
@@ -48,13 +54,13 @@ export function useAuthState(): AuthContextType {
     if (response.user) {
       setUser(response.user);
       localStorage.setItem('user', JSON.stringify(response.user));
+      // access_token is stored by auth.login()
     }
   };
 
   const logout = async () => {
-    await auth.logout();
+    await auth.logout(); // This clears both access_token and user from localStorage
     setUser(null);
-    localStorage.removeItem('user');
   };
 
   return {

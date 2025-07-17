@@ -9,6 +9,40 @@ const api = axios.create({
   },
 });
 
+// Request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor to handle auth errors
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      // Clear auth data and redirect to login
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('user');
+        localStorage.removeItem('access_token');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export interface RegisterData {
   username: string;
   password: string;
@@ -111,16 +145,6 @@ export interface MessageDataResponse {
 }
 
 // Store the access token in memory
-let accessToken: string | null = null;
-
-// Add request interceptor to add token to requests
-api.interceptors.request.use((config) => {
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
-  }
-  return config;
-});
-
 export const auth = {
   register: async (data: RegisterData): Promise<RegisterResponse> => {
     const response = await api.post('/auth/register', data);
@@ -129,21 +153,31 @@ export const auth = {
 
   login: async (data: LoginData): Promise<LoginResponse> => {
     const response = await api.post('/auth/login', data);
-    // Store the token
-    accessToken = response.data.access_token;
+    // Store the token in localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('access_token', response.data.access_token);
+    }
     return response.data;
   },
 
   logout: async () => {
     try {
-      await api.post('/auth/logout');
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+      if (token) {
+        await api.post('/auth/logout');
+      }
     } finally {
       // Clear token regardless of API call success
-      accessToken = null;
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+      }
     }
   },
 
-  getToken: () => accessToken,
+  getToken: () => {
+    return typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  },
 };
 
 // Chat API functions
